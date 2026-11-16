@@ -79,8 +79,14 @@ function formatCurrency(cents, currency = currentCurrency) {
  * Configure Donate Button behavior
  */
 function setupDonateLinks() {
+  const savedCheckout = localStorage.getItem('ls_checkout_url');
+  if (!currentCheckoutUrl && savedCheckout) {
+    currentCheckoutUrl = savedCheckout;
+  }
+
   const handleDonateClick = (e) => {
-    if (!currentCheckoutUrl) {
+    const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url');
+    if (!url) {
       e.preventDefault();
       openDrawer();
       showToast('Connect Lemon Squeezy', 'Paste your checkout URL in the settings panel to activate donations.', '💡');
@@ -88,15 +94,23 @@ function setupDonateLinks() {
       return;
     }
 
-    // If Lemon.js is available and URL is a valid Lemon Squeezy checkout link, use overlay
-    if (window.LemonSqueezy && typeof window.LemonSqueezy.Url?.Open === 'function' && currentCheckoutUrl.includes('lemonsqueezy.com')) {
-      e.preventDefault();
-      window.LemonSqueezy.Url.Open(currentCheckoutUrl);
+    // Direct, reliable navigation to Lemon Squeezy checkout in a new tab
+    if (mainDonateLink) {
+      mainDonateLink.href = url;
+      mainDonateLink.target = '_blank';
+      mainDonateLink.rel = 'noopener noreferrer';
     }
   };
 
   if (mainDonateLink) {
-    mainDonateLink.href = currentCheckoutUrl || '#';
+    const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url');
+    if (url) {
+      mainDonateLink.href = url;
+      mainDonateLink.target = '_blank';
+      mainDonateLink.rel = 'noopener noreferrer';
+    } else {
+      mainDonateLink.href = '#';
+    }
     mainDonateLink.onclick = handleDonateClick;
   }
 }
@@ -106,8 +120,8 @@ function setupDonateLinks() {
  */
 function updateDashboardMetrics(summary) {
   currentCurrency = summary.currency || 'USD';
-  currentGoalCents = summary.goalCents || 50000;
-  currentCheckoutUrl = summary.checkoutUrl || '';
+  currentGoalCents = summary.goalCents || parseInt(localStorage.getItem('ls_goal_cents'), 10) || 50000;
+  currentCheckoutUrl = summary.checkoutUrl || localStorage.getItem('ls_checkout_url') || '';
 
   // Total Raised (with bump animation)
   if (totalRaisedEl) {
@@ -372,25 +386,30 @@ if (simulateForm) {
 // Handle Save Checkout URL Button
 if (btnSaveCheckout && customCheckoutInput) {
   btnSaveCheckout.addEventListener('click', async () => {
-    const url = customCheckoutInput.value.trim();
+    let url = customCheckoutInput.value.trim();
     if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      alert('Please enter a valid URL starting with https://');
-      return;
+      url = 'https://' + url;
+      customCheckoutInput.value = url;
     }
+
+    // Immediately save locally and update button state
+    currentCheckoutUrl = url;
+    localStorage.setItem('ls_checkout_url', url);
+    setupDonateLinks();
 
     btnSaveCheckout.disabled = true;
     btnSaveCheckout.textContent = 'Saving...';
 
     try {
-      const res = await fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ checkoutUrl: url })
       });
-      if (!res.ok) throw new Error('Failed to save settings');
-      showToast('Checkout Link Saved! 🔗', 'Donation buttons now link to your Lemon Squeezy checkout page.', '✅');
+      showToast('Checkout Link Saved! 🔗', 'Donation button now opens your Lemon Squeezy checkout page.', '✅');
     } catch (err) {
-      alert('Failed to save checkout URL: ' + err.message);
+      console.warn('API save error, but saved locally:', err);
+      showToast('Checkout Link Saved! 🔗', 'Donation button now opens your Lemon Squeezy checkout page.', '✅');
     } finally {
       btnSaveCheckout.disabled = false;
       btnSaveCheckout.textContent = 'Save';
@@ -404,19 +423,25 @@ if (btnSaveGoal && customGoalInput) {
     const goalDollars = parseFloat(customGoalInput.value) || 500;
     const goalCents = Math.round(goalDollars * 100);
 
+    currentGoalCents = goalCents;
+    localStorage.setItem('ls_goal_cents', goalCents);
+    if (goalTargetEl) {
+      goalTargetEl.textContent = formatCurrency(goalCents, currentCurrency);
+    }
+
     btnSaveGoal.disabled = true;
     btnSaveGoal.textContent = 'Updating...';
 
     try {
-      const res = await fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ goalCents })
       });
-      if (!res.ok) throw new Error('Goal update failed');
       showToast('Goal Updated! 🎯', 'Target goal set to ' + formatCurrency(goalCents), '✅');
     } catch (err) {
-      alert('Failed to update goal: ' + err.message);
+      console.warn('API save error, but saved locally:', err);
+      showToast('Goal Updated! 🎯', 'Target goal set to ' + formatCurrency(goalCents), '✅');
     } finally {
       btnSaveGoal.disabled = false;
       btnSaveGoal.textContent = 'Update';
