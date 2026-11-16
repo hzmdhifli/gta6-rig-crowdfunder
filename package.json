@@ -1,0 +1,18 @@
+{
+  "name": "lemonsqueezy-donation-tracker",
+  "version": "1.0.0",
+  "description": "Real-time donation tracking system using Lemon Squeezy Webhooks & Server-Sent Events",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "simulate": "node scripts/simulate-webhook.js"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.9",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "serverless-http": "^4.0.0"
+  }
+}
