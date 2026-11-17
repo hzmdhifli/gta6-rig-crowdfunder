@@ -55,13 +55,15 @@ class DonationDB {
     } catch (err) {
       console.error('[DB] Failed to read database file, initializing empty store:', err.message);
     }
+const DEFAULT_CHECKOUT_URL = 'https://hazemdhifli.lemonsqueezy.com/checkout/buy/c9b6e790-4766-45c5-b677-7c625443bc8a';
+
     const initial = {
       orders: [],
       totalRaisedCents: 0,
       totalCount: 0,
       currency: 'USD',
       goalCents: parseInt(process.env.DONATION_GOAL_CENTS || '50000', 10),
-      checkoutUrl: process.env.LEMONSQUEEZY_CHECKOUT_URL || ''
+      checkoutUrl: process.env.LEMONSQUEEZY_CHECKOUT_URL || DEFAULT_CHECKOUT_URL
     };
     this.saveData(initial);
     return initial;
@@ -104,7 +106,7 @@ class DonationDB {
 
   getSummary() {
     const goalCents = this.data.goalCents || parseInt(process.env.DONATION_GOAL_CENTS || '50000', 10);
-    const checkoutUrl = this.data.checkoutUrl || process.env.LEMONSQUEEZY_CHECKOUT_URL || '';
+    const checkoutUrl = this.data.checkoutUrl || process.env.LEMONSQUEEZY_CHECKOUT_URL || DEFAULT_CHECKOUT_URL;
 
     // Calculate status of each hardware milestone
     let accumulated = 0;

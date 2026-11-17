@@ -1,7 +1,10 @@
-// Configuration & State (immediately hydrated from localStorage)
+// Default Permanent Checkout Link (Lemon Squeezy)
+const DEFAULT_CHECKOUT_URL = 'https://hazemdhifli.lemonsqueezy.com/checkout/buy/c9b6e790-4766-45c5-b677-7c625443bc8a';
+
+// Configuration & State (immediately hydrated from localStorage or default)
 let currentCurrency = 'USD';
 let currentGoalCents = parseInt(localStorage.getItem('ls_goal_cents'), 10) || 50000;
-let currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || '';
+let currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || DEFAULT_CHECKOUT_URL;
 
 // DOM Elements
 const totalRaisedEl = document.getElementById('total-raised');
@@ -90,7 +93,7 @@ function formatCurrency(cents, currency = currentCurrency) {
  * Configure Donate Button behavior
  */
 function setupDonateLinks() {
-  const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || '';
+  const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || DEFAULT_CHECKOUT_URL;
 
   if (mainDonateLink) {
     if (url) {
@@ -102,7 +105,7 @@ function setupDonateLinks() {
     }
 
     mainDonateLink.onclick = (e) => {
-      const activeUrl = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || '';
+      const activeUrl = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || DEFAULT_CHECKOUT_URL;
       if (!activeUrl) {
         e.preventDefault();
         openDrawer();
@@ -141,7 +144,7 @@ function updateDashboardMetrics(summary) {
     currentCheckoutUrl = summary.checkoutUrl.trim();
     localStorage.setItem('ls_checkout_url', currentCheckoutUrl);
   } else {
-    currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || currentCheckoutUrl || '';
+    currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || currentCheckoutUrl || DEFAULT_CHECKOUT_URL;
   }
 
   // Total Raised (with bump animation)
