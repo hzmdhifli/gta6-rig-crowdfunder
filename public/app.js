@@ -1,82 +1,30 @@
-// Default Permanent Checkout Link (Lemon Squeezy)
+// Default Permanent Configuration
 const DEFAULT_CHECKOUT_URL = 'https://hazemdhifli.lemonsqueezy.com/checkout/buy/c9b6e790-4766-45c5-b677-7c625443bc8a';
+const DEFAULT_GOAL_CENTS = 450000; // $4,500.00 Target Goal
 
-// Configuration & State (immediately hydrated from localStorage or default)
+// Configuration & State
 let currentCurrency = 'USD';
-let currentGoalCents = parseInt(localStorage.getItem('ls_goal_cents'), 10) || 50000;
-let currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || DEFAULT_CHECKOUT_URL;
+let currentGoalCents = DEFAULT_GOAL_CENTS;
+let currentCheckoutUrl = DEFAULT_CHECKOUT_URL;
+
+// Clear any stale local storage from older tests
+localStorage.removeItem('ls_goal_cents');
 
 // DOM Elements
 const totalRaisedEl = document.getElementById('total-raised');
 const goalProgressFillEl = document.getElementById('goal-progress-fill');
-const goalPercentageEl = document.getElementById('goal-percentage');
 const goalTargetEl = document.getElementById('goal-target');
-const remainingTextEl = document.getElementById('remaining-text');
-const budgetBadgeEl = document.getElementById('budget-badge');
-const totalCountEl = document.getElementById('total-count');
-const avgDonationEl = document.getElementById('avg-donation');
-const latestAmountEl = document.getElementById('latest-amount');
-const donationsListEl = document.getElementById('donations-list');
-const emptyStateEl = document.getElementById('empty-state');
-const hardwareRoadmapEl = document.getElementById('hardware-roadmap');
 const streamStatusEl = document.getElementById('stream-status');
 const toastContainerEl = document.getElementById('toast-container');
-const simulateForm = document.getElementById('simulate-form');
-const btnReset = document.getElementById('btn-reset');
-const webhookUrlDisplay = document.getElementById('webhook-url-display');
-const btnCopyUrl = document.getElementById('btn-copy-url');
-const customCheckoutInput = document.getElementById('custom-checkout-input');
-const btnSaveCheckout = document.getElementById('btn-save-checkout');
-const customGoalInput = document.getElementById('custom-goal-input');
-const btnSaveGoal = document.getElementById('btn-save-goal');
 const mainDonateLink = document.getElementById('main-donate-link');
-const btnToggleDrawer = document.getElementById('btn-toggle-drawer');
-const btnCloseDrawer = document.getElementById('btn-close-drawer');
-const drawerOverlay = document.getElementById('drawer-overlay');
-const sideDrawer = document.getElementById('side-drawer');
 
-// Pre-fill drawer inputs immediately from localStorage
-if (customCheckoutInput && currentCheckoutUrl) {
-  customCheckoutInput.value = currentCheckoutUrl;
-}
-if (customGoalInput && currentGoalCents) {
-  customGoalInput.value = Math.round(currentGoalCents / 100);
-}
-if (goalTargetEl && currentGoalCents) {
-  goalTargetEl.textContent = formatCurrency(currentGoalCents, currentCurrency);
-}
-
-// Drawer Open / Close
-function openDrawer() {
-  if (sideDrawer) sideDrawer.classList.add('active');
-  if (drawerOverlay) drawerOverlay.classList.add('active');
-}
-function closeDrawer() {
-  if (sideDrawer) sideDrawer.classList.remove('active');
-  if (drawerOverlay) drawerOverlay.classList.remove('active');
-}
-if (btnToggleDrawer) btnToggleDrawer.addEventListener('click', openDrawer);
-if (btnCloseDrawer) btnCloseDrawer.addEventListener('click', closeDrawer);
-if (drawerOverlay) drawerOverlay.addEventListener('click', closeDrawer);
-
-// Display current origin in webhook URL box
-if (webhookUrlDisplay) {
-  webhookUrlDisplay.textContent = `${window.location.origin}/api/webhook/lemonsqueezy`;
-}
-
-if (btnCopyUrl) {
-  btnCopyUrl.addEventListener('click', () => {
-    navigator.clipboard.writeText(webhookUrlDisplay.textContent).then(() => {
-      btnCopyUrl.textContent = 'Copied!';
-      setTimeout(() => {
-        btnCopyUrl.textContent = 'Copy';
-      }, 2000);
-    });
-  });
+// Set Initial Goal Display immediately
+if (goalTargetEl) {
+  goalTargetEl.textContent = '$4,500';
 }
 
 /**
- * Format cents to localized currency string (clean whole dollars e.g. $125, $500)
+ * Format cents to localized currency string (clean whole dollars e.g. $0, $4,500)
  */
 function formatCurrency(cents, currency = currentCurrency) {
   const val = cents / 100;
@@ -93,31 +41,10 @@ function formatCurrency(cents, currency = currentCurrency) {
  * Configure Donate Button behavior
  */
 function setupDonateLinks() {
-  const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || DEFAULT_CHECKOUT_URL;
-
   if (mainDonateLink) {
-    if (url) {
-      mainDonateLink.href = url;
-      mainDonateLink.target = '_blank';
-      mainDonateLink.rel = 'noopener noreferrer';
-    } else {
-      mainDonateLink.href = '#';
-    }
-
-    mainDonateLink.onclick = (e) => {
-      const activeUrl = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || DEFAULT_CHECKOUT_URL;
-      if (!activeUrl) {
-        e.preventDefault();
-        openDrawer();
-        showToast('Connect Lemon Squeezy', 'Paste your checkout URL in the settings panel to activate donations.', '💡');
-        if (customCheckoutInput) customCheckoutInput.focus();
-        return;
-      }
-      // Valid link! Make sure href and target are set and allow natural click to new tab
-      mainDonateLink.href = activeUrl;
-      mainDonateLink.target = '_blank';
-      mainDonateLink.rel = 'noopener noreferrer';
-    };
+    mainDonateLink.href = DEFAULT_CHECKOUT_URL;
+    mainDonateLink.target = '_blank';
+    mainDonateLink.rel = 'noopener noreferrer';
   }
 }
 
@@ -125,27 +52,12 @@ function setupDonateLinks() {
 setupDonateLinks();
 
 /**
- * Update Dashboard Display
+ * Update Dashboard Display in Real-Time
  */
 function updateDashboardMetrics(summary) {
   if (!summary) return;
   currentCurrency = summary.currency || currentCurrency || 'USD';
-
-  // Target Goal
-  if (summary.goalCents) {
-    currentGoalCents = summary.goalCents;
-    localStorage.setItem('ls_goal_cents', currentGoalCents);
-  } else {
-    currentGoalCents = parseInt(localStorage.getItem('ls_goal_cents'), 10) || currentGoalCents || 50000;
-  }
-
-  // Checkout URL: Only overwrite if backend gave a valid non-empty URL
-  if (summary.checkoutUrl && summary.checkoutUrl.trim().length > 0) {
-    currentCheckoutUrl = summary.checkoutUrl.trim();
-    localStorage.setItem('ls_checkout_url', currentCheckoutUrl);
-  } else {
-    currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || currentCheckoutUrl || DEFAULT_CHECKOUT_URL;
-  }
+  currentGoalCents = summary.goalCents || DEFAULT_GOAL_CENTS;
 
   // Total Raised (with bump animation)
   if (totalRaisedEl && summary.totalRaisedCents !== undefined) {
@@ -164,14 +76,6 @@ function updateDashboardMetrics(summary) {
   const percent = Math.min(100, Math.round((raised / currentGoalCents) * 100));
   if (goalProgressFillEl) {
     goalProgressFillEl.style.width = `${percent}%`;
-  }
-
-  // Drawer Settings inputs
-  if (customCheckoutInput && !customCheckoutInput.matches(':focus')) {
-    customCheckoutInput.value = currentCheckoutUrl;
-  }
-  if (customGoalInput && !customGoalInput.matches(':focus')) {
-    customGoalInput.value = Math.round(currentGoalCents / 100);
   }
 
   setupDonateLinks();
@@ -382,130 +286,6 @@ function setupEventStream() {
   } catch (err) {
     startPolling();
   }
-}
-
-/**
- * Global Quick Donate function for one-click test presets
- */
-window.quickDonate = async function (donorName, amount, message) {
-  try {
-    const res = await fetch('/api/simulate-donation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ donorName, amount, currency: currentCurrency, message })
-    });
-    if (!res.ok) throw new Error('Simulation failed');
-  } catch (err) {
-    showToast('Simulation Error', err.message, '❌');
-  }
-};
-
-// Handle Simulator Form Submission
-if (simulateForm) {
-  simulateForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = document.getElementById('btn-simulate');
-    if (btn) btn.disabled = true;
-
-    const payload = {
-      donorName: document.getElementById('sim-name').value,
-      amount: document.getElementById('sim-amount').value,
-      currency: document.getElementById('sim-currency').value,
-      message: document.getElementById('sim-message').value
-    };
-
-    try {
-      const res = await fetch('/api/simulate-donation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('Simulation failed');
-    } catch (err) {
-      alert('Error sending simulation: ' + err.message);
-    } finally {
-      if (btn) btn.disabled = false;
-    }
-  });
-}
-
-// Handle Save Checkout URL Button
-if (btnSaveCheckout && customCheckoutInput) {
-  btnSaveCheckout.addEventListener('click', async () => {
-    let url = customCheckoutInput.value.trim();
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://' + url;
-      customCheckoutInput.value = url;
-    }
-
-    // Immediately save locally and update button state
-    currentCheckoutUrl = url;
-    localStorage.setItem('ls_checkout_url', url);
-    setupDonateLinks();
-
-    btnSaveCheckout.disabled = true;
-    btnSaveCheckout.textContent = 'Saving...';
-
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checkoutUrl: url })
-      });
-      showToast('Checkout Link Saved! 🔗', 'Donation button now opens your Lemon Squeezy checkout page.', '✅');
-    } catch (err) {
-      console.warn('API save error, but saved locally:', err);
-      showToast('Checkout Link Saved! 🔗', 'Donation button now opens your Lemon Squeezy checkout page.', '✅');
-    } finally {
-      btnSaveCheckout.disabled = false;
-      btnSaveCheckout.textContent = 'Save';
-    }
-  });
-}
-
-// Handle Save Goal Button
-if (btnSaveGoal && customGoalInput) {
-  btnSaveGoal.addEventListener('click', async () => {
-    const goalDollars = parseFloat(customGoalInput.value) || 500;
-    const goalCents = Math.round(goalDollars * 100);
-
-    currentGoalCents = goalCents;
-    localStorage.setItem('ls_goal_cents', goalCents);
-    if (goalTargetEl) {
-      goalTargetEl.textContent = formatCurrency(goalCents, currentCurrency);
-    }
-
-    btnSaveGoal.disabled = true;
-    btnSaveGoal.textContent = 'Updating...';
-
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalCents })
-      });
-      showToast('Goal Updated! 🎯', 'Target goal set to ' + formatCurrency(goalCents), '✅');
-    } catch (err) {
-      console.warn('API save error, but saved locally:', err);
-      showToast('Goal Updated! 🎯', 'Target goal set to ' + formatCurrency(goalCents), '✅');
-    } finally {
-      btnSaveGoal.disabled = false;
-      btnSaveGoal.textContent = 'Update';
-    }
-  });
-}
-
-// Handle Reset Button
-if (btnReset) {
-  btnReset.addEventListener('click', async () => {
-    if (!confirm('Are you sure you want to reset all donation data? (Your checkout URL will be kept)')) return;
-    try {
-      await fetch('/api/reset', { method: 'POST' });
-      showToast('Data Reset', 'All demo donations have been cleared.', '🔄');
-    } catch (err) {
-      alert('Reset failed: ' + err.message);
-    }
-  });
 }
 
 // ========================================================

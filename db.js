@@ -62,7 +62,7 @@ const DEFAULT_CHECKOUT_URL = 'https://hazemdhifli.lemonsqueezy.com/checkout/buy/
       totalRaisedCents: 0,
       totalCount: 0,
       currency: 'USD',
-      goalCents: parseInt(process.env.DONATION_GOAL_CENTS || '50000', 10),
+      goalCents: parseInt(process.env.DONATION_GOAL_CENTS || '450000', 10),
       checkoutUrl: process.env.LEMONSQUEEZY_CHECKOUT_URL || DEFAULT_CHECKOUT_URL
     };
     this.saveData(initial);
@@ -105,7 +105,7 @@ const DEFAULT_CHECKOUT_URL = 'https://hazemdhifli.lemonsqueezy.com/checkout/buy/
   }
 
   getSummary() {
-    const goalCents = this.data.goalCents || parseInt(process.env.DONATION_GOAL_CENTS || '50000', 10);
+    const goalCents = this.data.goalCents || parseInt(process.env.DONATION_GOAL_CENTS || '450000', 10);
     const checkoutUrl = this.data.checkoutUrl || process.env.LEMONSQUEEZY_CHECKOUT_URL || DEFAULT_CHECKOUT_URL;
 
     // Calculate status of each hardware milestone
