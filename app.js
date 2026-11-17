@@ -1,7 +1,7 @@
-// Configuration & State
-let currentGoalCents = 250000; // Default $2,500.00 (updated from backend summary)
+// Configuration & State (immediately hydrated from localStorage)
 let currentCurrency = 'USD';
-let currentCheckoutUrl = '';
+let currentGoalCents = parseInt(localStorage.getItem('ls_goal_cents'), 10) || 50000;
+let currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || '';
 
 // DOM Elements
 const totalRaisedEl = document.getElementById('total-raised');
@@ -31,6 +31,17 @@ const btnToggleDrawer = document.getElementById('btn-toggle-drawer');
 const btnCloseDrawer = document.getElementById('btn-close-drawer');
 const drawerOverlay = document.getElementById('drawer-overlay');
 const sideDrawer = document.getElementById('side-drawer');
+
+// Pre-fill drawer inputs immediately from localStorage
+if (customCheckoutInput && currentCheckoutUrl) {
+  customCheckoutInput.value = currentCheckoutUrl;
+}
+if (customGoalInput && currentGoalCents) {
+  customGoalInput.value = Math.round(currentGoalCents / 100);
+}
+if (goalTargetEl && currentGoalCents) {
+  goalTargetEl.textContent = formatCurrency(currentGoalCents, currentCurrency);
+}
 
 // Drawer Open / Close
 function openDrawer() {
@@ -79,31 +90,9 @@ function formatCurrency(cents, currency = currentCurrency) {
  * Configure Donate Button behavior
  */
 function setupDonateLinks() {
-  const savedCheckout = localStorage.getItem('ls_checkout_url');
-  if (!currentCheckoutUrl && savedCheckout) {
-    currentCheckoutUrl = savedCheckout;
-  }
-
-  const handleDonateClick = (e) => {
-    const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url');
-    if (!url) {
-      e.preventDefault();
-      openDrawer();
-      showToast('Connect Lemon Squeezy', 'Paste your checkout URL in the settings panel to activate donations.', '💡');
-      if (customCheckoutInput) customCheckoutInput.focus();
-      return;
-    }
-
-    // Direct, reliable navigation to Lemon Squeezy checkout in a new tab
-    if (mainDonateLink) {
-      mainDonateLink.href = url;
-      mainDonateLink.target = '_blank';
-      mainDonateLink.rel = 'noopener noreferrer';
-    }
-  };
+  const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || '';
 
   if (mainDonateLink) {
-    const url = currentCheckoutUrl || localStorage.getItem('ls_checkout_url');
     if (url) {
       mainDonateLink.href = url;
       mainDonateLink.target = '_blank';
@@ -111,20 +100,52 @@ function setupDonateLinks() {
     } else {
       mainDonateLink.href = '#';
     }
-    mainDonateLink.onclick = handleDonateClick;
+
+    mainDonateLink.onclick = (e) => {
+      const activeUrl = currentCheckoutUrl || localStorage.getItem('ls_checkout_url') || '';
+      if (!activeUrl) {
+        e.preventDefault();
+        openDrawer();
+        showToast('Connect Lemon Squeezy', 'Paste your checkout URL in the settings panel to activate donations.', '💡');
+        if (customCheckoutInput) customCheckoutInput.focus();
+        return;
+      }
+      // Valid link! Make sure href and target are set and allow natural click to new tab
+      mainDonateLink.href = activeUrl;
+      mainDonateLink.target = '_blank';
+      mainDonateLink.rel = 'noopener noreferrer';
+    };
   }
 }
+
+// Immediately set up links on load!
+setupDonateLinks();
 
 /**
  * Update Dashboard Display
  */
 function updateDashboardMetrics(summary) {
-  currentCurrency = summary.currency || 'USD';
-  currentGoalCents = summary.goalCents || parseInt(localStorage.getItem('ls_goal_cents'), 10) || 50000;
-  currentCheckoutUrl = summary.checkoutUrl || localStorage.getItem('ls_checkout_url') || '';
+  if (!summary) return;
+  currentCurrency = summary.currency || currentCurrency || 'USD';
+
+  // Target Goal
+  if (summary.goalCents) {
+    currentGoalCents = summary.goalCents;
+    localStorage.setItem('ls_goal_cents', currentGoalCents);
+  } else {
+    currentGoalCents = parseInt(localStorage.getItem('ls_goal_cents'), 10) || currentGoalCents || 50000;
+  }
+
+  // Checkout URL: Only overwrite if backend gave a valid non-empty URL
+  if (summary.checkoutUrl && summary.checkoutUrl.trim().length > 0) {
+    currentCheckoutUrl = summary.checkoutUrl.trim();
+    localStorage.setItem('ls_checkout_url', currentCheckoutUrl);
+  } else {
+    currentCheckoutUrl = localStorage.getItem('ls_checkout_url') || currentCheckoutUrl || '';
+  }
 
   // Total Raised (with bump animation)
-  if (totalRaisedEl) {
+  if (totalRaisedEl && summary.totalRaisedCents !== undefined) {
     totalRaisedEl.textContent = formatCurrency(summary.totalRaisedCents, currentCurrency);
     totalRaisedEl.classList.add('bump');
     setTimeout(() => totalRaisedEl.classList.remove('bump'), 500);
@@ -136,7 +157,8 @@ function updateDashboardMetrics(summary) {
   }
 
   // Progress Bar
-  const percent = Math.min(100, Math.round((summary.totalRaisedCents / currentGoalCents) * 100));
+  const raised = summary.totalRaisedCents || 0;
+  const percent = Math.min(100, Math.round((raised / currentGoalCents) * 100));
   if (goalProgressFillEl) {
     goalProgressFillEl.style.width = `${percent}%`;
   }
@@ -254,11 +276,12 @@ function triggerConfetti() {
 }
 
 /**
- * Set up Server-Sent Events (SSE) Live Connection
+ * Set up Server-Sent Events (SSE) Live Connection with Smart Polling fallback
  */
 function setupEventStream() {
   let pollInterval = null;
   let lastTotal = null;
+  let evtSource = null;
 
   function startPolling() {
     if (pollInterval) return;
@@ -283,59 +306,79 @@ function setupEventStream() {
     }, 4000);
   }
 
-  evtSource.onopen = () => {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-    if (streamStatusEl) {
-      streamStatusEl.classList.remove('error');
-      streamStatusEl.querySelector('.status-text').textContent = 'Live';
-    }
-  };
+  // Fetch initial summary immediately so there is ZERO waiting time on refresh!
+  fetch('/api/donations')
+    .then((r) => (r.ok ? r.json() : null))
+    .then((summary) => {
+      if (summary) {
+        lastTotal = summary.totalRaisedCents;
+        updateDashboardMetrics(summary);
+      }
+    })
+    .catch(() => {});
 
-  evtSource.onerror = () => {
-    // On Netlify serverless, SSE times out, so switch to smart polling
+  // Try real-time Server-Sent Events
+  try {
+    evtSource = new EventSource('/api/donations/stream');
+
+    evtSource.onopen = () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      if (streamStatusEl) {
+        streamStatusEl.classList.remove('error');
+        streamStatusEl.querySelector('.status-text').textContent = 'Live';
+      }
+    };
+
+    evtSource.onerror = () => {
+      startPolling();
+    };
+
+    // Initial state received via SSE
+    evtSource.addEventListener('init', (e) => {
+      try {
+        const summary = JSON.parse(e.data);
+        updateDashboardMetrics(summary);
+
+        if (donationsListEl) {
+          donationsListEl.innerHTML = '';
+          if (summary.recentDonations && summary.recentDonations.length > 0) {
+            if (emptyStateEl) emptyStateEl.style.display = 'none';
+            summary.recentDonations.forEach((order) => {
+              donationsListEl.appendChild(createDonationElement(order));
+            });
+          } else if (emptyStateEl) {
+            donationsListEl.appendChild(emptyStateEl);
+            emptyStateEl.style.display = 'block';
+          }
+        }
+      } catch (err) {}
+    });
+
+    // Real-time new donation pushed by Lemon Squeezy webhook!
+    evtSource.addEventListener('new_donation', (e) => {
+      try {
+        const { order, summary } = JSON.parse(e.data);
+        updateDashboardMetrics(summary);
+
+        if (emptyStateEl && emptyStateEl.parentElement === donationsListEl) {
+          emptyStateEl.remove();
+        }
+
+        if (donationsListEl) {
+          const newEl = createDonationElement(order);
+          donationsListEl.insertBefore(newEl, donationsListEl.firstChild);
+        }
+
+        triggerConfetti();
+        showDonationToast(order);
+      } catch (err) {}
+    });
+  } catch (err) {
     startPolling();
-  };
-
-  // Initial state received
-  evtSource.addEventListener('init', (e) => {
-    const summary = JSON.parse(e.data);
-    updateDashboardMetrics(summary);
-
-    donationsListEl.innerHTML = '';
-    if (summary.recentDonations && summary.recentDonations.length > 0) {
-      emptyStateEl.style.display = 'none';
-      summary.recentDonations.forEach((order) => {
-        donationsListEl.appendChild(createDonationElement(order));
-      });
-    } else {
-      donationsListEl.appendChild(emptyStateEl);
-      emptyStateEl.style.display = 'block';
-    }
-  });
-
-  // Real-time new donation pushed by Lemon Squeezy webhook!
-  evtSource.addEventListener('new_donation', (e) => {
-    const { order, summary } = JSON.parse(e.data);
-
-    // Update numbers
-    updateDashboardMetrics(summary);
-
-    // Remove empty state if present
-    if (emptyStateEl && emptyStateEl.parentElement === donationsListEl) {
-      emptyStateEl.remove();
-    }
-
-    // Insert new item at the very top of the feed
-    const newEl = createDonationElement(order);
-    donationsListEl.insertBefore(newEl, donationsListEl.firstChild);
-
-    // Visual celebration & Toast alert
-    triggerConfetti();
-    showDonationToast(order);
-  });
+  }
 }
 
 /**
